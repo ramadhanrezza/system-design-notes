@@ -1,21 +1,69 @@
 # System Design Notes
 
-A collection of practical system design and software architecture notes based on real enterprise engineering experience.
+Practical system design and software architecture notes for modern backend engineers.
+
+Unlike interview-focused repositories, this handbook emphasizes real-world engineering decisions, production architectures, trade-offs, and implementation considerations.
+
+---
 
 ## Topics
 
-- Authentication
-- Authorization
 - Multi-Tenant SaaS
+- Authentication
 - API Design
 - Database Design
-- Docker
-- Event-Driven Architecture
 - Caching
-- Scaling
+- Event-Driven Architecture
+- Docker & Deployment
+- Scalability
+- Distributed Systems
 - Security
-- AI Architecture
 
-## Goal
+---
 
-This repository documents practical engineering knowledge with architecture diagrams, trade-off analysis, and real-world examples rather than purely academic theory.
+## Philosophy
+
+Every article answers four questions:
+
+1. What problem does this solve?
+2. How does it work?
+3. What are the trade-offs?
+4. When should you use it?
+
+The goal is to explain why architectural decisions are made, not just what technologies exist.
+
+---
+
+## Repository Structure
+
+fundamentals/
+architecture/
+authentication/
+database/
+caching/
+api/
+saas/
+deployment/
+security/
+case-studies/
+
+---
+
+## Reading Order
+
+1. Fundamentals
+2. Database Design
+3. API Design
+4. Authentication
+5. Multi-Tenant SaaS
+6. Caching
+7. Event-Driven Architecture
+8. Deployment
+9. Distributed Systems
+10. Case Studies
+
+---
+
+## License
+
+MIT
