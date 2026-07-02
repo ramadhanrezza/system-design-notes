@@ -1470,10 +1470,10 @@ A routing layer determines where each tenant's data resides.
 ```mermaid
 flowchart TD
 
-Request->>Tenant Resolver-->Tenant Registry-->{Storage Type}
+Request-->TenantResolver-->TenantRegistry-->StorageType
 
-Storage Type --> Shared[(Shared Database)]
-Storage Type --> Dedicated[(Dedicated Database)]
+StorageType --> Shared[(Shared Database)]
+StorageType --> Dedicated[(Dedicated Database)]
 ```
 
 The tenant registry stores metadata describing each tenant, including:
@@ -1953,19 +1953,7 @@ Instead of trusting application code, the database itself decides which rows may
 ```mermaid
 flowchart LR
 
-Application
-
-↓
-
-PostgreSQL
-
-↓
-
-RLS Policy
-
-↓
-
-Rows Returned
+Application-->PostgreSQL-->RLSPolicy-->Rows Returned
 ```
 
 Example policy:
