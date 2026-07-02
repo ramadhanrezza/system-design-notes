@@ -1904,25 +1904,9 @@ Data isolation should never depend on developer discipline alone.
 Instead, it should be enforced at multiple layers.
 
 ```mermaid
-flowchart TD
+flowchart TD;
 
-Application
-
-↓
-
-Authorization
-
-↓
-
-ORM
-
-↓
-
-Database
-
-↓
-
-Storage
+Application-->Authorization-->ORM-->Database-->Storage
 ```
 
 Each layer reinforces the previous one.
