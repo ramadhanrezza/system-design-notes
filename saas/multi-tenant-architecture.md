@@ -1470,19 +1470,7 @@ A routing layer determines where each tenant's data resides.
 ```
 flowchart TD
 
-Request
-
-↓
-
-Tenant Resolver
-
-↓
-
-Tenant Registry
-
-↓
-
-{Storage Type}
+Request->>Tenant Resolver-->Tenant Registry-->{Storage Type}
 
 Storage Type --> Shared[(Shared Database)]
 Storage Type --> Dedicated[(Dedicated Database)]
