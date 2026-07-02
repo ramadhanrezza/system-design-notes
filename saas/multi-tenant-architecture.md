@@ -968,3 +968,541 @@ Each model optimizes different priorities.
 There is no universally correct architecture.
 
 The best choice depends on business requirements, customer expectations, regulatory constraints, and operational maturity.
+
+---
+
+# Shared Database, Shared Schema
+
+The **Shared Database, Shared Schema** model is the most common architecture for early-stage SaaS applications.
+
+In this model, every tenant shares:
+
+- The same application
+- The same database
+- The same tables
+
+Instead of creating separate tables for each tenant, every record is associated with a tenant identifier.
+
+```mermaid
+flowchart TD
+
+ClientA[Tenant A]
+ClientB[Tenant B]
+ClientC[Tenant C]
+
+App[Application]
+
+DB[(PostgreSQL)]
+
+Players[(players)]
+Matches[(matches)]
+Users[(users)]
+
+ClientA --> App
+ClientB --> App
+ClientC --> App
+
+App --> DB
+
+DB --> Players
+DB --> Matches
+DB --> Users
+```
+
+A typical table looks like this:
+
+| id | tenant_id | name |
+|----|-----------|------|
+| 1 | club-alpha | Alice |
+| 2 | club-alpha | Bob |
+| 3 | club-beta | Charlie |
+
+Every query **must** include the tenant identifier.
+
+```sql
+SELECT *
+FROM players
+WHERE tenant_id = 'club-alpha';
+```
+
+The application should never execute business queries without tenant filtering.
+
+---
+
+## Advantages
+
+### Lowest Infrastructure Cost
+
+Only one database needs to be maintained regardless of the number of tenants.
+
+This keeps cloud costs low and makes the architecture attractive for startups.
+
+---
+
+### Simple Operations
+
+Because every tenant shares the same infrastructure, operational tasks become significantly easier.
+
+Examples include:
+
+- Database migrations
+- Backups
+- Monitoring
+- Infrastructure provisioning
+- Deployment
+
+The engineering team only manages one environment.
+
+---
+
+### Excellent Resource Utilization
+
+Resources are shared efficiently.
+
+Inactive tenants consume very little infrastructure while busy tenants can utilize unused capacity.
+
+---
+
+### Fast Tenant Provisioning
+
+Creating a new tenant usually requires inserting a few database records.
+
+Provisioning often completes in seconds.
+
+---
+
+## Disadvantages
+
+### Risk of Cross-Tenant Data Exposure
+
+The biggest disadvantage is the possibility of missing tenant filters.
+
+Consider the following query.
+
+```sql
+SELECT *
+FROM players;
+```
+
+Without a tenant filter, every tenant's data is returned.
+
+This is one of the most common security bugs in multi-tenant applications.
+
+---
+
+### Noisy Neighbor Problem
+
+Since all tenants share the same database, one tenant can consume excessive resources.
+
+Examples include:
+
+- Expensive reports
+- Large imports
+- Heavy analytics
+- Poorly optimized queries
+
+These workloads can negatively affect other tenants.
+
+---
+
+### Compliance Limitations
+
+Some enterprise customers require dedicated databases for legal or regulatory reasons.
+
+Shared databases may not satisfy these requirements.
+
+---
+
+## Best Practices
+
+- Every table should include `tenant_id`.
+- Apply tenant filtering automatically whenever possible.
+- Prevent developers from bypassing tenant isolation.
+- Include `tenant_id` in indexes.
+- Use database constraints where appropriate.
+- Consider PostgreSQL Row Level Security for additional protection.
+
+---
+
+## Common Mistakes
+
+### Forgetting Tenant Filters
+
+This is by far the most common mistake.
+
+Developers often remember tenant filtering during feature development but accidentally omit it when writing:
+
+- Reports
+- Admin dashboards
+- Background jobs
+- Export functionality
+
+---
+
+### Trusting the Client
+
+Never trust a tenant identifier supplied directly by the frontend.
+
+The server should determine tenant context independently.
+
+---
+
+### Shared Cache Keys
+
+Avoid cache keys like:
+
+```
+players
+```
+
+Instead use:
+
+```
+tenant:club-alpha:players
+```
+
+Otherwise cached data may leak between tenants.
+
+---
+
+## When Should You Choose This Model?
+
+Shared Schema is an excellent choice when:
+
+- Building an MVP
+- Launching a startup
+- Supporting hundreds or thousands of tenants
+- Infrastructure cost is a priority
+- Compliance requirements are moderate
+
+Many successful SaaS products begin with this architecture.
+
+---
+
+# Shared Database, Separate Schemas
+
+Instead of sharing tables, each tenant receives its own schema within the same database.
+
+```
+PostgreSQL
+
+├── tenant_alpha
+│   ├── users
+│   ├── players
+│   └── tournaments
+│
+├── tenant_beta
+│   ├── users
+│   ├── players
+│   └── tournaments
+│
+└── tenant_gamma
+    ├── users
+    ├── players
+    └── tournaments
+```
+
+Although the database server is shared, each tenant's tables are isolated.
+
+```mermaid
+flowchart TD
+
+Application
+
+Application --> SchemaA["tenant_alpha"]
+Application --> SchemaB["tenant_beta"]
+Application --> SchemaC["tenant_gamma"]
+
+SchemaA --> DB[(PostgreSQL)]
+SchemaB --> DB
+SchemaC --> DB
+```
+
+---
+
+## Advantages
+
+### Better Isolation
+
+Developers cannot accidentally query another tenant's table simply by forgetting a filter.
+
+Each tenant owns separate tables.
+
+---
+
+### Easier Backup and Restore
+
+Because each tenant has its own schema, restoring a single customer becomes much easier than restoring an entire shared database.
+
+---
+
+### Cleaner Database Organization
+
+Large tenants remain logically separated, making administration easier.
+
+---
+
+## Disadvantages
+
+### Schema Migrations Become Harder
+
+Every schema must receive identical migrations.
+
+Instead of updating one schema, migrations now run hundreds or thousands of times.
+
+---
+
+### Operational Complexity
+
+Managing:
+
+- Schema creation
+- Schema deletion
+- Schema versioning
+
+becomes increasingly difficult as the platform grows.
+
+---
+
+### Connection Management
+
+Applications must determine which schema should be active before executing queries.
+
+This adds complexity to database access layers.
+
+---
+
+## Best Practices
+
+- Automate schema creation.
+- Automate migrations.
+- Keep every schema on the same version.
+- Monitor migration failures carefully.
+
+---
+
+## When Should You Choose This Model?
+
+This architecture works well for:
+
+- Medium-sized SaaS companies
+- Enterprise products
+- Moderate compliance requirements
+- Hundreds of large customers
+
+---
+
+# Database Per Tenant
+
+Database Per Tenant provides the strongest level of isolation.
+
+Each tenant receives an entirely independent database.
+
+```mermaid
+flowchart LR
+
+Application
+
+Application --> DBA[(Tenant A Database)]
+Application --> DBB[(Tenant B Database)]
+Application --> DBC[(Tenant C Database)]
+```
+
+No customer shares storage with another customer.
+
+---
+
+## Advantages
+
+### Maximum Isolation
+
+Every tenant owns:
+
+- Database
+- Backups
+- Performance profile
+
+Cross-tenant data leaks caused by SQL queries become significantly less likely.
+
+---
+
+### Independent Scaling
+
+Large enterprise customers can scale independently.
+
+One customer's workload cannot impact another's database.
+
+---
+
+### Easier Compliance
+
+Many regulations become easier to satisfy when customers own dedicated databases.
+
+Examples include:
+
+- Financial systems
+- Healthcare platforms
+- Government applications
+
+---
+
+### Per-Tenant Maintenance
+
+Individual databases can be:
+
+- Upgraded
+- Backed up
+- Restored
+- Migrated
+
+without affecting other customers.
+
+---
+
+## Disadvantages
+
+### Highest Infrastructure Cost
+
+Every tenant requires:
+
+- Database server resources
+- Monitoring
+- Backup storage
+- Maintenance
+
+Infrastructure costs increase substantially.
+
+---
+
+### Operational Overhead
+
+Provisioning databases, applying migrations, rotating credentials, and monitoring thousands of databases require significant automation.
+
+---
+
+### Increased Complexity
+
+Application routing becomes more sophisticated because the application must determine which database should receive each request.
+
+---
+
+## Best Practices
+
+- Automate provisioning.
+- Automate credential management.
+- Automate migrations.
+- Centralize monitoring.
+- Maintain a tenant registry describing database locations.
+
+---
+
+## When Should You Choose This Model?
+
+Database Per Tenant is most appropriate for:
+
+- Enterprise SaaS
+- Government platforms
+- Healthcare
+- Banking
+- High-value enterprise customers
+
+---
+
+# Comparing Isolation Models
+
+| Feature | Shared Schema | Separate Schemas | Database per Tenant |
+|---------|---------------|------------------|---------------------|
+| Infrastructure Cost | Low | Medium | High |
+| Operational Complexity | Low | Medium | High |
+| Customer Isolation | Good | Better | Best |
+| Scalability | Excellent | Good | Good |
+| Backup Granularity | Whole Database | Per Schema | Per Database |
+| Compliance | Moderate | Good | Excellent |
+| Startup Friendly | Excellent | Good | Poor |
+| Enterprise Friendly | Moderate | Good | Excellent |
+
+The important takeaway is that **no model is universally superior**.
+
+Each represents a different balance between simplicity, cost, operational complexity, and isolation.
+
+---
+
+# Hybrid Architecture
+
+Many successful SaaS companies do **not** stay with one isolation model forever.
+
+Instead, they evolve as their customer base grows.
+
+A common progression looks like this:
+
+```text
+Startup
+    │
+    ▼
+Shared Database
+    │
+    ▼
+Growing SaaS
+    │
+    ▼
+Separate Schemas
+    │
+    ▼
+Enterprise Customers
+    │
+    ▼
+Dedicated Databases
+```
+
+Small customers share infrastructure because doing so is cost-effective.
+
+Large enterprise customers receive dedicated infrastructure when justified by:
+
+- Performance
+- Compliance
+- Service Level Agreements (SLAs)
+- Security requirements
+
+This hybrid approach balances operational efficiency with customer-specific requirements.
+
+A routing layer determines where each tenant's data resides.
+
+```mermaid
+flowchart TD
+
+Request
+
+↓
+
+Tenant Resolver
+
+↓
+
+Tenant Registry
+
+↓
+
+{Storage Type}
+
+Storage Type --> Shared[(Shared Database)]
+Storage Type --> Dedicated[(Dedicated Database)]
+```
+
+The tenant registry stores metadata describing each tenant, including:
+
+- Tenant identifier
+- Subscription plan
+- Database connection
+- Region
+- Storage model
+- Feature flags
+
+The application uses this information to route requests transparently.
+
+From the user's perspective, nothing changes.
+
+Regardless of whether their data is stored in a shared database or a dedicated database, the application behaves identically.
+
+This ability to evolve infrastructure without changing the user experience is one of the defining characteristics of well-designed SaaS platforms.
+
+---
