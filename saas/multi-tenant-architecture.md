@@ -433,3 +433,538 @@ The application must now ensure:
 In other words, multi-tenancy trades operational simplicity for engineering complexity.
 
 A well-designed architecture embraces this trade-off while ensuring that customers never experience its underlying complexity.
+
+---
+
+# Core Concepts
+
+Before exploring implementation details, it's important to establish a common vocabulary. These terms appear frequently throughout this article and in many production SaaS systems.
+
+## Tenant
+
+A **tenant** is the highest-level business entity within a multi-tenant application.
+
+A tenant usually represents an organization rather than an individual user.
+
+Examples include:
+
+- A company using a CRM platform
+- A school using a learning management system
+- A sports club using a tournament management platform
+- A hospital using a patient management system
+
+A tenant owns data, users, configuration, subscriptions, and resources.
+
+```
+Tenant
+├── Users
+├── Teams
+├── Players
+├── Tournaments
+├── Settings
+└── Billing
+```
+
+Everything inside the tenant belongs exclusively to that organization.
+
+---
+
+## User
+
+A **user** is an individual capable of authenticating with the application.
+
+A user is **not** the same as a tenant.
+
+For example:
+
+| User | Tenant |
+|-------|---------|
+| Alice | Club Alpha |
+| Bob | Club Alpha |
+| Charlie | Club Beta |
+
+One tenant usually contains many users.
+
+Some applications also allow one user to belong to multiple tenants.
+
+For example:
+
+```
+Alice
+
+├── Club Alpha (Admin)
+├── Club Bravo (Coach)
+└── Club Charlie (Player)
+```
+
+This is common in:
+
+- Slack
+- Notion
+- GitHub
+- Microsoft Teams
+
+Supporting multiple tenant memberships introduces additional complexity, which will be discussed later in this article.
+
+---
+
+## Membership
+
+A membership defines the relationship between a user and a tenant.
+
+Instead of storing tenant information directly on the user, many systems introduce a join table.
+
+```
+Users
+
+Alice
+Bob
+Charlie
+
+        │
+
+        ▼
+
+Memberships
+
+Alice → Club Alpha → Admin
+
+Bob → Club Alpha → Coach
+
+Charlie → Club Beta → Player
+```
+
+This model enables:
+
+- Multiple organizations per user
+- Different roles per organization
+- Easier invitation workflows
+- Flexible permission management
+
+---
+
+## Tenant Context
+
+One of the most important concepts in multi-tenant systems is **tenant context**.
+
+Tenant context represents the tenant currently associated with a request.
+
+Every operation performed by the application should use this context.
+
+```
+Incoming Request
+
+        │
+
+        ▼
+
+Tenant Resolution
+
+        │
+
+        ▼
+
+Tenant Context = Club Alpha
+
+        │
+
+        ▼
+
+Business Logic
+
+        │
+
+        ▼
+
+Database Query
+```
+
+Once tenant context has been established, it should remain available throughout the lifetime of the request.
+
+Losing tenant context can lead to incorrect authorization, cache pollution, or, in the worst case, cross-tenant data exposure.
+
+---
+
+## Resource Ownership
+
+Every business object should have a clearly defined owner.
+
+For example:
+
+```
+Club Alpha
+
+├── Players
+├── Coaches
+├── Tournaments
+├── Courts
+└── Invoices
+```
+
+A player belonging to Club Alpha should never appear inside Club Beta.
+
+This sounds obvious, but maintaining ownership consistently becomes increasingly difficult as applications grow.
+
+---
+
+# Tenant Lifecycle
+
+A tenant is more than a row in a database.
+
+Throughout its lifetime, a tenant progresses through several operational stages.
+
+```mermaid
+flowchart TD
+
+Signup --> Provision
+
+Provision --> Configure
+
+Configure --> Invite
+
+Invite --> Active
+
+Active --> Upgrade
+
+Upgrade --> Suspend
+
+Suspend --> Archive
+```
+
+Each stage introduces different architectural concerns.
+
+---
+
+## 1. Signup
+
+The lifecycle begins when a customer creates a new organization.
+
+Typical actions include:
+
+- Choosing an organization name
+- Selecting a subscription plan
+- Creating the first administrator
+- Accepting terms of service
+
+At this stage, very little infrastructure exists.
+
+---
+
+## 2. Provisioning
+
+After signup, the platform prepares resources for the new tenant.
+
+Depending on the chosen architecture, provisioning may include:
+
+- Creating database records
+- Creating a schema
+- Creating a dedicated database
+- Creating storage buckets
+- Initializing configuration
+- Creating default roles
+
+Provisioning should be automated.
+
+Manual provisioning quickly becomes impossible as the platform grows.
+
+---
+
+## 3. Configuration
+
+After resources exist, the tenant customizes the platform.
+
+Typical configuration includes:
+
+- Organization profile
+- Branding
+- Languages
+- Time zone
+- Notification preferences
+- Billing information
+
+Many SaaS platforms also create default data during this stage.
+
+Examples include:
+
+- Default roles
+- Default permissions
+- Example projects
+- Example tournaments
+
+---
+
+## 4. Active Usage
+
+This is the longest stage of the tenant lifecycle.
+
+Daily operations include:
+
+- User authentication
+- CRUD operations
+- Background jobs
+- Notifications
+- Reporting
+- Billing
+- Monitoring
+
+Most architectural discussions focus on this stage because it represents normal production traffic.
+
+---
+
+## 5. Upgrade
+
+As customers grow, their infrastructure requirements often change.
+
+Examples include:
+
+- More storage
+- More users
+- Higher API limits
+- Premium features
+- Dedicated infrastructure
+
+Well-designed SaaS applications allow upgrades without downtime.
+
+---
+
+## 6. Suspension
+
+Sometimes access must be temporarily disabled.
+
+Reasons include:
+
+- Failed payments
+- Compliance issues
+- Customer requests
+- Security incidents
+
+Suspension should prevent access without deleting customer data.
+
+---
+
+## 7. Archive or Deletion
+
+Eventually a tenant may leave the platform.
+
+Possible actions include:
+
+- Export data
+- Archive records
+- Remove user access
+- Delete infrastructure
+- Retain data according to legal requirements
+
+Deletion should be a carefully controlled process with appropriate retention policies.
+
+---
+
+# Tenant Identification
+
+Before the application can enforce isolation, it must determine **which tenant the incoming request belongs to**.
+
+This process is known as **tenant identification** or **tenant resolution**.
+
+It is one of the earliest steps in request processing.
+
+```mermaid
+flowchart LR
+
+Request
+
+--> TenantResolver
+
+--> Authentication
+
+--> Authorization
+
+--> BusinessLogic
+
+--> Database
+```
+
+Everything that follows depends on correctly identifying the tenant.
+
+---
+
+## Subdomain-Based Identification
+
+One of the most common approaches uses subdomains.
+
+```
+https://club-alpha.example.com
+```
+
+The application extracts the tenant identifier from the hostname.
+
+```
+club-alpha.example.com
+
+↑
+
+Tenant Identifier
+```
+
+### Advantages
+
+- Professional URLs
+- Easy branding
+- Supports custom domains
+- Widely adopted by SaaS platforms
+
+### Disadvantages
+
+- Requires wildcard DNS
+- SSL certificate management
+- Slightly more complicated local development
+
+### Best For
+
+- Production SaaS products
+- Enterprise applications
+- White-label platforms
+
+---
+
+## URL Path
+
+Some applications include the tenant inside the URL.
+
+```
+https://example.com/club-alpha
+```
+
+### Advantages
+
+- Easy implementation
+- Simple local development
+- No wildcard DNS
+
+### Disadvantages
+
+- Less professional
+- Harder migration to custom domains
+- More complicated routing
+
+### Best For
+
+- MVPs
+- Internal applications
+- Small SaaS products
+
+---
+
+## Custom Domains
+
+Enterprise customers often want to use their own domains.
+
+```
+https://portal.clubalpha.com
+```
+
+or
+
+```
+https://play.clubalpha.com
+```
+
+Internally, the platform maps the domain to a tenant.
+
+```
+portal.clubalpha.com
+
+        │
+
+        ▼
+
+Tenant Lookup
+
+        │
+
+        ▼
+
+Club Alpha
+```
+
+Although this creates an excellent user experience, it increases operational complexity.
+
+The platform must manage:
+
+- DNS verification
+- SSL certificates
+- Domain ownership
+- Renewals
+
+---
+
+## JWT Claims
+
+Instead of using the URL, the tenant identifier can be embedded inside the access token.
+
+Example payload:
+
+```json
+{
+  "sub": "user-123",
+  "tenantId": "club-alpha",
+  "role": "admin"
+}
+```
+
+This approach is particularly common for APIs and mobile applications.
+
+However, if users can switch organizations, a new token typically needs to be issued.
+
+---
+
+## Request Headers
+
+Internal services sometimes pass tenant information using headers.
+
+```
+X-Tenant-ID: club-alpha
+```
+
+This approach is useful for service-to-service communication.
+
+Public clients should generally **not** be trusted to provide tenant identifiers directly.
+
+Instead, the server should derive tenant context from trusted information whenever possible.
+
+---
+
+# Tenant Isolation Models
+
+Once a tenant has been identified, the next architectural decision is determining **how tenant data is isolated**.
+
+This is arguably the most important decision in a multi-tenant system.
+
+There are three widely adopted models.
+
+```mermaid
+flowchart LR
+
+A["Shared Database<br/>Shared Schema"]
+
+B["Shared Database<br/>Separate Schemas"]
+
+C["Database<br/>Per Tenant"]
+
+A --> D[Increasing Isolation]
+
+B --> D
+
+C --> D
+```
+
+Each model optimizes different priorities.
+
+| Priority | Shared Schema | Separate Schemas | Database per Tenant |
+|----------|---------------|------------------|---------------------|
+| Cost | ⭐⭐⭐ | ⭐⭐ | ⭐ |
+| Isolation | ⭐ | ⭐⭐ | ⭐⭐⭐ |
+| Operational Simplicity | ⭐⭐⭐ | ⭐⭐ | ⭐ |
+| Enterprise Readiness | ⭐ | ⭐⭐ | ⭐⭐⭐ |
+
+There is no universally correct architecture.
+
+The best choice depends on business requirements, customer expectations, regulatory constraints, and operational maturity.
