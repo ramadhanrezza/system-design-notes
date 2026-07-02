@@ -1467,7 +1467,7 @@ This hybrid approach balances operational efficiency with customer-specific requ
 
 A routing layer determines where each tenant's data resides.
 
-```mermaid
+```
 flowchart TD
 
 Request
