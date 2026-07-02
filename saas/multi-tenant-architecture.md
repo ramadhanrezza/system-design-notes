@@ -1506,3 +1506,592 @@ Regardless of whether their data is stored in a shared database or a dedicated d
 This ability to evolve infrastructure without changing the user experience is one of the defining characteristics of well-designed SaaS platforms.
 
 ---
+
+# Request Flow
+
+Regardless of the tenant isolation model, every request should follow a predictable processing pipeline.
+
+Establishing a consistent request flow improves security, maintainability, and observability.
+
+```mermaid
+flowchart LR
+
+Client --> Gateway
+
+Gateway --> TenantResolver
+
+TenantResolver --> Authentication
+
+Authentication --> Authorization
+
+Authorization --> BusinessLogic
+
+BusinessLogic --> Database
+
+BusinessLogic --> Cache
+
+BusinessLogic --> Storage
+
+BusinessLogic --> EventBus
+
+BusinessLogic --> Response
+```
+
+Each stage has a distinct responsibility.
+
+| Step | Responsibility |
+|------|----------------|
+| API Gateway | Receives incoming requests |
+| Tenant Resolver | Determines the active tenant |
+| Authentication | Verifies user identity |
+| Authorization | Checks permissions |
+| Business Logic | Executes application rules |
+| Database | Reads and writes tenant data |
+| Event Bus | Publishes domain events |
+| Response | Returns results to the client |
+
+Keeping these responsibilities separate simplifies testing and reduces coupling.
+
+---
+
+## Step 1 — API Gateway
+
+The API Gateway is the application's entry point.
+
+Typical responsibilities include:
+
+- HTTPS termination
+- Request routing
+- Rate limiting
+- Logging
+- Request validation
+- Distributed tracing
+
+Importantly, the gateway **should not contain business logic**.
+
+Instead, it prepares requests for downstream services.
+
+---
+
+## Step 2 — Tenant Resolution
+
+Before authentication or business logic executes, the application determines which tenant the request belongs to.
+
+Depending on the architecture, this information may come from:
+
+- Subdomain
+- Custom domain
+- URL path
+- JWT claims
+- Internal routing metadata
+
+Example:
+
+```
+https://club-alpha.example.com
+```
+
+↓
+
+```
+Tenant = club-alpha
+```
+
+The resolved tenant should be attached to the request context.
+
+For example:
+
+```text
+Request Context
+
+Tenant ID: club-alpha
+Request ID: 7fc91...
+User ID: pending authentication
+```
+
+From this point forward, every component should use the same tenant context.
+
+---
+
+## Step 3 — Authentication
+
+Authentication answers one question:
+
+> Who is making this request?
+
+Typical authentication methods include:
+
+- Username and password
+- OAuth 2.0
+- OpenID Connect
+- Single Sign-On (SSO)
+- API Keys
+- JWT access tokens
+
+Authentication verifies identity.
+
+It does **not** determine what the user is allowed to do.
+
+---
+
+## Step 4 — Authorization
+
+Authorization answers a different question:
+
+> Is this authenticated user allowed to perform this action within the current tenant?
+
+Authorization typically evaluates:
+
+- User role
+- Assigned permissions
+- Tenant membership
+- Resource ownership
+
+For example:
+
+```
+Alice
+
+↓
+
+Club Alpha
+
+↓
+
+Role = Tournament Admin
+
+↓
+
+Can Create Tournament = Yes
+```
+
+Whereas:
+
+```
+Alice
+
+↓
+
+Club Beta
+
+↓
+
+Role = Viewer
+
+↓
+
+Can Create Tournament = No
+```
+
+Notice that permissions are evaluated **within a tenant**, not globally.
+
+This distinction is critical in multi-tenant systems where users may belong to multiple organizations.
+
+---
+
+## Step 5 — Business Logic
+
+Once the request has passed authentication and authorization, the application executes business logic.
+
+Examples include:
+
+- Creating tournaments
+- Registering players
+- Updating rankings
+- Scheduling matches
+- Processing invoices
+
+Business logic should never need to determine the current tenant.
+
+It should simply consume the tenant context established earlier in the request pipeline.
+
+This separation makes application code significantly easier to understand.
+
+---
+
+## Step 6 — Data Access
+
+Every database operation must be tenant-aware.
+
+Instead of:
+
+```sql
+SELECT *
+FROM tournaments;
+```
+
+Applications should execute:
+
+```sql
+SELECT *
+FROM tournaments
+WHERE tenant_id = :tenantId;
+```
+
+Ideally, developers should not write tenant filtering manually.
+
+Instead, use a repository layer, ORM global filters, or Row Level Security (RLS) to enforce isolation automatically.
+
+---
+
+# Authentication and Authorization
+
+Authentication and authorization are often discussed together, but they solve different problems.
+
+| Authentication | Authorization |
+|---------------|---------------|
+| Who are you? | What are you allowed to do? |
+| Identity | Permissions |
+| Login | Access Control |
+
+Confusing these concepts often results in security vulnerabilities.
+
+---
+
+## Authentication in Multi-Tenant Systems
+
+Authentication verifies identity independently of tenant permissions.
+
+For example:
+
+```
+Email
+
+↓
+
+Password
+
+↓
+
+User Verified
+```
+
+At this point, the application knows who the user is.
+
+It still does **not** know which organization the user wants to access.
+
+If users belong to multiple organizations, an additional tenant selection step may be required.
+
+```
+Alice
+
+↓
+
+Authenticated
+
+↓
+
+Choose Organization
+
+├── Club Alpha
+├── Club Bravo
+└── Club Delta
+```
+
+Only after selecting a tenant can authorization begin.
+
+---
+
+## Tenant Membership
+
+Many SaaS applications model user access using a membership table.
+
+```text
+Users
+
+↓
+
+Memberships
+
+↓
+
+Tenants
+```
+
+Example:
+
+| User | Tenant | Role |
+|------|---------|------|
+| Alice | Club Alpha | Admin |
+| Alice | Club Bravo | Coach |
+| Bob | Club Alpha | Player |
+
+This design supports:
+
+- Multiple organizations
+- Different roles
+- Organization invitations
+- Easy permission management
+
+---
+
+## Role-Based Access Control (RBAC)
+
+Role-Based Access Control groups permissions into reusable roles.
+
+Example:
+
+```
+Admin
+
+├── Create Tournament
+├── Delete Tournament
+├── Invite Users
+└── Manage Billing
+```
+
+```
+Coach
+
+├── Create Match
+├── Update Scores
+└── View Players
+```
+
+```
+Player
+
+├── View Schedule
+└── Update Profile
+```
+
+Instead of assigning hundreds of permissions directly to users, the application assigns roles.
+
+This greatly simplifies administration.
+
+---
+
+## Fine-Grained Permissions
+
+As systems grow, roles alone are often insufficient.
+
+Consider:
+
+```
+Tournament Admin
+
+Can edit tournaments?
+
+YES
+
+Only tournaments belonging to Club Alpha?
+
+YES
+
+Only tournaments created this season?
+
+YES
+```
+
+Fine-grained permission systems evaluate:
+
+- Resource ownership
+- Tenant ownership
+- Team ownership
+- Department
+- Subscription plan
+
+These rules are evaluated after authentication.
+
+---
+
+# Data Isolation
+
+The primary responsibility of a multi-tenant architecture is preventing one tenant from accessing another tenant's data.
+
+Data isolation should never depend on developer discipline alone.
+
+Instead, it should be enforced at multiple layers.
+
+```mermaid
+flowchart TD
+
+Application
+
+↓
+
+Authorization
+
+↓
+
+ORM
+
+↓
+
+Database
+
+↓
+
+Storage
+```
+
+Each layer reinforces the previous one.
+
+This concept is known as **defense in depth**.
+
+---
+
+## Application Layer
+
+The application validates:
+
+- Tenant membership
+- User permissions
+- Resource ownership
+
+Business logic should reject unauthorized requests before they reach the database.
+
+---
+
+## ORM Layer
+
+Many Object-Relational Mapping (ORM) frameworks support global query filters.
+
+Instead of requiring developers to remember tenant filtering, the ORM automatically injects:
+
+```sql
+WHERE tenant_id = :tenantId
+```
+
+This significantly reduces the likelihood of accidental data leaks.
+
+---
+
+## Database Layer
+
+The database should also participate in tenant isolation.
+
+For example:
+
+- Foreign key constraints
+- Check constraints
+- Unique composite indexes
+- Row Level Security
+
+The database should never assume the application is always correct.
+
+---
+
+# Row Level Security (RLS)
+
+Some relational databases, such as PostgreSQL, support Row Level Security (RLS).
+
+Instead of trusting application code, the database itself decides which rows may be accessed.
+
+```mermaid
+flowchart LR
+
+Application
+
+↓
+
+PostgreSQL
+
+↓
+
+RLS Policy
+
+↓
+
+Rows Returned
+```
+
+Example policy:
+
+```
+Users may only access rows
+where tenant_id equals
+their current tenant.
+```
+
+Even if a developer accidentally writes:
+
+```sql
+SELECT *
+FROM players;
+```
+
+The database still filters rows according to the active policy.
+
+This dramatically reduces the risk of cross-tenant data exposure.
+
+---
+
+## Benefits of Row Level Security
+
+- Strong defense against programming mistakes
+- Centralized security rules
+- Simplified application code
+- Better compliance
+- Additional protection for administrative queries
+
+Although RLS introduces additional planning and testing, it is an excellent choice for security-sensitive SaaS platforms.
+
+---
+
+# Database Design
+
+Good database design makes multi-tenancy easier to maintain as the application grows.
+
+A typical shared-schema design includes tenant ownership on every business table.
+
+Example:
+
+```text
+tenants
+
+users
+
+memberships
+
+players
+
+tournaments
+
+matches
+
+payments
+```
+
+Relationships:
+
+```mermaid
+erDiagram
+
+TENANTS ||--o{ MEMBERSHIPS : has
+USERS ||--o{ MEMBERSHIPS : belongs_to
+
+TENANTS ||--o{ PLAYERS : owns
+TENANTS ||--o{ TOURNAMENTS : owns
+TENANTS ||--o{ MATCHES : owns
+```
+
+Notice that business entities belong to tenants rather than directly to users.
+
+This simplifies ownership when users change roles or leave the organization.
+
+---
+
+## Indexing
+
+Nearly every query filters using `tenant_id`.
+
+Therefore, indexing this column is essential.
+
+Instead of:
+
+```sql
+INDEX(name)
+```
+
+consider:
+
+```sql
+INDEX(tenant_id, name)
+```
+
+Composite indexes often perform significantly better for tenant-scoped queries.
+
+Design indexes based on actual query patterns rather than adding them indiscriminately.
+
+---
