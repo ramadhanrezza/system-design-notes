@@ -2,7 +2,9 @@
 
 Practical notes on authentication and authorization for modern web applications, APIs, and multi-tenant SaaS platforms.
 
-This section focuses on production trade-offs: browser security, session management, token rotation, authorization boundaries, and tenant-aware access control.
+This section focuses on production trade-offs: browser security, session management, token rotation, authorization boundaries, tenant context, membership validation, and tenant-aware access control.
+
+---
 
 ## Articles
 
@@ -15,11 +17,19 @@ This section focuses on production trade-offs: browser security, session managem
 - [Role-Based Access Control (RBAC)](./rbac.md)  
   Design tenant-scoped roles, permissions, resource policies, support access, auditability, and authorization caching.
 
+- [Multi-Tenant Authentication](./multi-tenant-authentication.md)  
+  Explain how authentication, tenant context, membership validation, RBAC, and resource ownership work together in SaaS applications.
+
+---
+
 ## Recommended Reading Order
 
 1. [Session vs JWT Authentication](./session-vs-jwt-authentication.md)
 2. [Refresh Token Rotation](./refresh-token-rotation.md)
 3. [Role-Based Access Control (RBAC)](./rbac.md)
+4. [Multi-Tenant Authentication](./multi-tenant-authentication.md)
+
+---
 
 ## Related Sections
 

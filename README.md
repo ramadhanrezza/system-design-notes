@@ -26,6 +26,9 @@ The goal is to explain not only what technologies and patterns exist, but why an
 - [Role-Based Access Control (RBAC)](./authentication/rbac.md)  
   Design tenant-scoped roles, permissions, resource policies, support access, auditability, and authorization caching.
 
+- [Multi-Tenant Authentication](./authentication/multi-tenant-authentication.md)  
+  Explain how authentication, tenant context, membership validation, RBAC, and resource ownership work together in SaaS applications.
+
 ---
 
 ## Topics
@@ -72,21 +75,15 @@ system-design-notes/
 ├── README.md
 │
 ├── saas/
+│   ├── README.md
 │   └── multi-tenant-architecture.md
 │
-├── authentication/
-│   ├── session-vs-jwt-authentication.md
-│   ├── refresh-token-rotation.md
-│   └── rbac.md
-│
-├── api/
-├── caching/
-├── database/
-├── deployment/
-├── distributed-systems/
-├── event-driven/
-├── security/
-└── case-studies/
+└── authentication/
+    ├── README.md
+    ├── session-vs-jwt-authentication.md
+    ├── refresh-token-rotation.md
+    ├── rbac.md
+    └── multi-tenant-authentication.md
 ```
 
 Only published articles are added to the repository navigation. New folders and documents are introduced when there is useful, complete content to publish.
@@ -99,8 +96,23 @@ Only published articles are added to the repository navigation. New folders and 
 2. [Session vs JWT Authentication](./authentication/session-vs-jwt-authentication.md)
 3. [Refresh Token Rotation](./authentication/refresh-token-rotation.md)
 4. [Role-Based Access Control (RBAC)](./authentication/rbac.md)
+5. [Multi-Tenant Authentication](./authentication/multi-tenant-authentication.md)
 
 Future articles will expand from these foundations into tenant isolation, API design, database design, caching, event-driven systems, and deployment architecture.
+
+---
+
+## Version 1 Scope
+
+Version 1 of this repository focuses on a small set of high-quality articles tied to real SaaS architecture decisions:
+
+- Multi-tenancy
+- Authentication strategy
+- Refresh token rotation
+- Tenant-scoped authorization
+- Multi-tenant authentication flow
+
+The goal is not to cover every system design topic at once. The goal is to publish clear, practical, and well-explained architecture notes that demonstrate engineering judgment.
 
 ---
 
